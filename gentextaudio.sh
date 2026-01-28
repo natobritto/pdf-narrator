@@ -26,6 +26,22 @@ TEXT_INPUT="$1"
 OUTPUT_PATH="${2:-tts_output.wav}"
 VOICE_OVERRIDE="${3:-}"
 
+# Resolve script directory to find sibling scripts reliably
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+# If first arg is a PDF path, route to genpdfaudio.sh
+if [[ -f "$TEXT_INPUT" && "$TEXT_INPUT" == *.pdf ]]; then
+  if [[ -n "${2:-}" ]]; then
+    echo "Note: output filename is ignored for PDF input; using genpdfaudio.sh defaults." >&2
+  fi
+  if [[ ! -x "$SCRIPT_DIR/genpdfaudio.sh" ]]; then
+    echo "Error: genpdfaudio.sh not found or not executable at: $SCRIPT_DIR/genpdfaudio.sh" >&2
+    exit 1
+  fi
+  "$SCRIPT_DIR/genpdfaudio.sh" "$TEXT_INPUT" "$VOICE_OVERRIDE"
+  exit 0
+fi
+
 python - "$TEXT_INPUT" "$OUTPUT_PATH" "$VOICE_OVERRIDE" <<'PY'
 import json
 import os
