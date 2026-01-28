@@ -82,7 +82,7 @@ rich==13.9.4
 rpds-py==0.23.1
 safetensors==0.5.3
 scipy==1.15.2
-segments==2.3.0
+segments==2.2.1
 setuptools==75.8.2
 shellingham==1.5.4
 six==1.17.0
@@ -98,9 +98,9 @@ sympy==1.13.1
 thinc==8.3.4
 tika>=2.6
 tokenizers==0.21.0
-torch==2.6.0+cu124
-torchaudio==2.6.0+cu124
-torchvision==0.21.0+cu124
+torch==2.6.0
+torchaudio==2.6.0
+torchvision==0.21.0
 tqdm==4.67.1
 transformers==4.49.0
 ttkbootstrap==1.10.1
