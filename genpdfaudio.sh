@@ -2,8 +2,9 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 <file>.pdf [voicepack]" >&2
+  echo "Usage: $0 <file>.pdf|<folder> [voicepack]" >&2
   echo "Example: $0 ./book.pdf am_liam" >&2
+  echo "Example: $0 ./pdfs/ am_liam" >&2
 }
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
@@ -14,12 +15,19 @@ fi
 INPUT_PATH="$1"
 VOICE_OVERRIDE="${2:-}"
 
-if [[ ! -f "$INPUT_PATH" ]]; then
-  echo "Error: file not found: $INPUT_PATH" >&2
-  exit 1
-fi
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-python - "$INPUT_PATH" "$VOICE_OVERRIDE" <<'PY'
+process_pdf() {
+  local pdf_path="$1"
+  local base_name
+  local final_output
+  base_name="$(basename "${pdf_path%.*}")"
+  final_output="$(dirname "$pdf_path")/${base_name}.wav"
+
+  if [[ -s "$final_output" ]]; then
+    echo "Skipping (cached): $pdf_path -> $final_output"
+  else
+    python - "$pdf_path" "$VOICE_OVERRIDE" <<'PY'
 import json
 import os
 import sys
@@ -105,3 +113,27 @@ combined = np.concatenate(chunks) if len(chunks) > 1 else chunks[0]
 sf.write(final_output, combined, sr)
 print(f"Combined WAV saved: {final_output}")
 PY
+  fi
+
+  if [[ -s "$final_output" && -x "$SCRIPT_DIR/save_google_drive.sh" ]]; then
+    "$SCRIPT_DIR/save_google_drive.sh" "$final_output" || true
+  fi
+}
+
+if [[ -d "$INPUT_PATH" ]]; then
+  mapfile -d '' pdfs < <(find "$INPUT_PATH" -type f -iname "*.pdf" -print0 | sort -z)
+  if [[ "${#pdfs[@]}" -eq 0 ]]; then
+    echo "Error: no PDF files found in folder: $INPUT_PATH" >&2
+    exit 1
+  fi
+  for pdf in "${pdfs[@]}"; do
+    process_pdf "$pdf"
+  done
+  exit 0
+fi
+
+if [[ ! -f "$INPUT_PATH" ]]; then
+  echo "Error: file or folder not found: $INPUT_PATH" >&2
+  exit 1
+fi
+process_pdf "$INPUT_PATH"
