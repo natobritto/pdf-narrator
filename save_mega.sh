@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./upload_mega.sh <file> [remote_folder]
-# Example: ./upload_mega.sh song.mp3 /AudioUploads
+# Usage:
+#   ./upload_mega.sh <file1> [file2 ...] [remote_folder]
+# Examples:
+#   ./upload_mega.sh song.mp3 song2.mp3
+#   ./upload_mega.sh *.mp3 /AudioUploads
 
-FILE="${1:-}"
-REMOTE_DIR="${2:-/AudioUploads}"
-
-if [[ -z "$FILE" ]]; then
-  echo "Usage: $0 <file> [remote_folder]"
+if [[ "$#" -lt 1 ]]; then
+  echo "Usage: $0 <file1> [file2 ...] [remote_folder]"
   exit 2
 fi
 
-if [[ ! -f "$FILE" ]]; then
-  echo "File not found: $FILE"
-  exit 2
+# Default remote directory
+REMOTE_DIR="/AudioUploads"
+
+# If last argument starts with /, treat it as remote folder
+if [[ "${!#}" == /* ]]; then
+  REMOTE_DIR="${!#}"
+  FILES=("${@:1:$#-1}")
+else
+  FILES=("$@")
 fi
 
 # Ensure MEGAcmd is available
@@ -23,17 +29,24 @@ if ! command -v mega-put >/dev/null 2>&1; then
   exit 1
 fi
 
-# Ensure we're logged in (mega-whoami exits non-zero if not)
+# Ensure we're logged in
 if ! mega-whoami >/dev/null 2>&1; then
   echo "Not logged in. Run: mega-login your@email.com"
   exit 1
 fi
 
-# Ensure destination folder exists (ignore error if it already exists)
+# Ensure destination folder exists
 mega-mkdir -p "$REMOTE_DIR" >/dev/null 2>&1 || true
 
-# Upload (overwrite if same name exists)
-# -c = "create" (resume/continue) is useful for flaky connections on big files in some setups
-mega-put "$FILE" "$REMOTE_DIR"
+# Upload files
+for FILE in "${FILES[@]}"; do
+  if [[ ! -f "$FILE" ]]; then
+    echo "Skipping (not a file): $FILE"
+    continue
+  fi
 
-echo "Uploaded: $FILE -> $REMOTE_DIR/"
+  echo "Uploading: $FILE → $REMOTE_DIR/"
+  mega-put "$FILE" "$REMOTE_DIR"
+done
+
+echo "Upload complete."
