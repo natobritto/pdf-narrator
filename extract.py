@@ -330,7 +330,11 @@ def scanned_pdf(path):
         filtered_text = " ".join(filtered_lines)
         out.append(filtered_text)
     
-    cv2.destroyAllWindows()
+    # Safe cleanup for headless environments (no GUI)
+    try:
+        cv2.destroyAllWindows()
+    except cv2.error:
+        pass
     return ". ".join(out)
 
 # --- TOC and Chapter Structuring ---
@@ -765,19 +769,47 @@ def save_chapters_generic(chapters, book_name, output_dir):
 
     print(f"  Finished saving chapters.")
 
+def chunk_text_by_words(text, max_words=20000):
+    """Splits text into chunks of up to max_words words."""
+    words = re.findall(r'\S+', text)
+    if len(words) <= max_words:
+        return [text]
+
+    chunks = []
+    for i in range(0, len(words), max_words):
+        chunk_words = words[i:i + max_words]
+        chunks.append(" ".join(chunk_words))
+    return chunks
+
+
 def save_whole_book_text(full_text, book_name, output_dir):
-    """Cleans and saves the entire book text to a single file."""
+    """Cleans and saves the entire book text to a single file or chunks if too large."""
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, f"{book_name}_full_text.txt")
     print(f"  Cleaning full text...")
     cleaned_full_text = clean_pipeline(full_text) # Apply cleaning pipeline
-    print(f"  Saving full text to '{output_file}'...")
-    try:
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(cleaned_full_text)
-        print(f"  Full text saved.")
-    except Exception as e:
-        print(f"  Error saving full text: {e}")
+
+    chunks = chunk_text_by_words(cleaned_full_text, max_words=20000)
+    if len(chunks) == 1:
+        output_file = os.path.join(output_dir, f"{book_name}_full_text.txt")
+        print(f"  Saving full text to '{output_file}'...")
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(chunks[0])
+            print(f"  Full text saved.")
+        except Exception as e:
+            print(f"  Error saving full text: {e}")
+        return
+
+    print(f"  Full text exceeds 20000 words. Saving {len(chunks)} chunks...")
+    padding = len(str(len(chunks)))
+    for idx, chunk in enumerate(chunks, 1):
+        output_file = os.path.join(output_dir, f"{book_name}_full_text_part_{str(idx).zfill(padding)}.txt")
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(chunk)
+        except Exception as e:
+            print(f"  Error saving chunk '{output_file}': {e}")
+    print(f"  Full text chunks saved.")
 
 
 # --- Main Extraction Function ---
