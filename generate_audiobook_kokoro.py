@@ -307,6 +307,13 @@ def generate_audiobooks_kokoro(
             base_name = os.path.splitext(text_file)[0]
             output_filename = f"{base_name}{audio_format}"
             output_path = os.path.join(output_dir, output_filename)
+            print(f"   Input : '{input_path}'")
+            print(f"   Output: '{output_path}'")
+            if os.path.exists(output_path):
+                print(f"   Warning: Output file already exists, skipping...")
+                generated_files.append(output_path)
+                files_processed_successfully += 1
+                continue
 
             # --- Call the file generation function ---
             # Pass a lambda that captures the current file context for the internal callback
