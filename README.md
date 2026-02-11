@@ -191,6 +191,55 @@ eSpeak NG is required for phoneme-based operations.
    ```
 
 ---
+## CUDA Setup on Ubuntu 22.04
+
+If you plan to leverage your NVIDIA GPU for Kokoro TTS inference, follow these steps to install the NVIDIA drivers, CUDA toolkit, and a matching CUDA-enabled PyTorch build.
+
+1. **Install NVIDIA drivers and supporting packages**
+   ```bash
+   sudo apt update
+   sudo apt install -y build-essential dkms linux-headers-$(uname -r) ubuntu-drivers-common
+   sudo ubuntu-drivers autoinstall
+   sudo reboot
+   ```
+   Rebooting ensures the new driver is active and you can verify the installation with `nvidia-smi`.
+
+2. **Install CUDA 12.4 toolkit (Ubuntu 22.04 repo install)**
+   ```bash
+   wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+   sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+   wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda-repo-ubuntu2204-12-4-local_12.4.0-535.54.03-1_amd64.deb
+   sudo dpkg -i cuda-repo-ubuntu2204-12-4-local_12.4.0-535.54.03-1_amd64.deb
+   sudo cp /var/cuda-repo-ubuntu2204-12-4-local/cuda-*-keyring.gpg /usr/share/keyrings/
+   sudo apt update
+   sudo apt -y install cuda-toolkit-12-4
+   ```
+   The installer drops CUDA into `/usr/local/cuda-12.4`; the symlink `/usr/local/cuda` points to it.
+
+3. **Configure your shell environment**
+   ```bash
+   echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
+   echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+4. **Install a CUDA-enabled PyTorch build**
+   ```bash
+   pip install torch --index-url https://download.pytorch.org/whl/cu124
+   ```
+   Replace `cu124` with the appropriate tag if you install a newer PyTorch release. Verify the installation with:
+   ```bash
+   python -c "import torch; print('cuda:', torch.cuda.is_available())"
+   ```
+
+5. **Verify the CUDA stack before running PDF Narrator**
+   - `nvidia-smi` should show your NVIDIA GPU and driver version.
+   - `nvcc --version` should report CUDA 12.4.
+   - `python -c "import torch; print(torch.cuda.get_device_name(0))"` should report your GPU.
+
+Once CUDA is configured, the `generate_audiobooks_kokoro` flow in this repo can utilize `torch.cuda.is_available()` to pick the GPU during TTS inference. If you still see `device=cpu` in the logs, double-check the PyTorch build and restart your shell so the new `PATH` / `LD_LIBRARY_PATH` are applied.
+
+---
 ## Quick Start
 
 1. **Launch the App**
