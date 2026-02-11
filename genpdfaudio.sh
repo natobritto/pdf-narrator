@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
+#
+# DEPRECATED: This script has been replaced by batch_processor.py
+# Please use: python batch_processor.py [options]
+# Or use the simple wrapper: ./genpdfaudio_simple.sh
+#
+# This script is kept for backward compatibility but forwards to the new system.
+#
+
 set -euo pipefail
+
+echo "⚠️  NOTICE: genpdfaudio.sh is deprecated"
+echo "   Please use: python batch_processor.py --help"
+echo "   Or use simple wrapper: ./genpdfaudio_simple.sh"
+echo ""
+echo "   Forwarding to new batch processor..."
+echo ""
 
 usage() {
   echo "Usage: $0 <file>.pdf|<folder> [voicepack]" >&2
@@ -16,8 +31,34 @@ INPUT_PATH="$1"
 VOICE_OVERRIDE="${2:-}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-process_pdf() {
+# Forward to new batch processor
+CMD="python batch_processor.py \"$INPUT_PATH\""
+
+if [[ -n "$VOICE_OVERRIDE" ]]; then
+  CMD="$CMD --voice \"$VOICE_OVERRIDE\""
+fi
+
+if [[ -d "$INPUT_PATH" ]]; then
+  CMD="$CMD --batch"
+fi
+
+# Add timestamped log file
+LOG_FILE="audiobook_$(date +%Y%m%d_%H%M%S).log"
+CMD="$CMD --log-file \"$LOG_FILE\""
+
+echo "Forwarding to: $CMD"
+echo "Log file: $LOG_FILE"
+echo ""
+
+eval $CMD
+exit $?
+
+# ======================================================================
+# OLD IMPLEMENTATION BELOW - KEPT FOR REFERENCE ONLY
+# ======================================================================
+process_pdf_old() {
   local pdf_path="$1"
   local base_name
   local final_output
@@ -98,19 +139,47 @@ audio_files = sorted(
 if not audio_files:
     raise FileNotFoundError(f"No .wav files found in {audio_dir}")
 
-chunks = []
+print(f"Combining {len(audio_files)} audio files into: {final_output}")
+
+# Memory-efficient approach: stream audio in chunks instead of loading everything
+CHUNK_SIZE = 50  # Process 50 files at a time to avoid OOM
 sr = None
+total_samples = 0
+
+# First pass: verify sample rates and count total samples
+print("Verifying audio files and calculating total length...")
 for fname in audio_files:
     path = os.path.join(audio_dir, fname)
-    data, file_sr = sf.read(path, always_2d=False)
+    info = sf.info(path)
     if sr is None:
-        sr = file_sr
-    elif file_sr != sr:
-        raise ValueError(f"Sample rate mismatch in {fname}: {file_sr} != {sr}")
-    chunks.append(data)
+        sr = info.samplerate
+    elif info.samplerate != sr:
+        raise ValueError(f"Sample rate mismatch in {fname}: {info.samplerate} != {sr}")
+    total_samples += info.frames
 
-combined = np.concatenate(chunks) if len(chunks) > 1 else chunks[0]
-sf.write(final_output, combined, sr)
+print(f"Total samples: {total_samples}, sample rate: {sr}, duration: {total_samples/sr:.1f}s")
+
+# Second pass: stream and concatenate in chunks
+print(f"Streaming audio in chunks of {CHUNK_SIZE} files...")
+with sf.SoundFile(final_output, 'w', sr, channels=1, subtype='PCM_16') as outfile:
+    for i in range(0, len(audio_files), CHUNK_SIZE):
+        chunk_files = audio_files[i:i+CHUNK_SIZE]
+        print(f"  Processing chunk {i//CHUNK_SIZE + 1}/{(len(audio_files) + CHUNK_SIZE - 1)//CHUNK_SIZE} ({len(chunk_files)} files)...")
+        
+        # Load and concatenate this chunk
+        chunk_data = []
+        for fname in chunk_files:
+            path = os.path.join(audio_dir, fname)
+            data, _ = sf.read(path, always_2d=False, dtype='float32')  # Use float32 to save memory
+            chunk_data.append(data)
+        
+        # Concatenate chunk and write
+        combined_chunk = np.concatenate(chunk_data) if len(chunk_data) > 1 else chunk_data[0]
+        outfile.write(combined_chunk)
+        
+        # Clear memory
+        del chunk_data, combined_chunk
+
 print(f"Combined WAV saved: {final_output}")
 PY
   fi
@@ -120,20 +189,23 @@ PY
   fi
 }
 
-if [[ -d "$INPUT_PATH" ]]; then
-  mapfile -d '' pdfs < <(find "$INPUT_PATH" -type f -iname "*.pdf" -print0 | sort -z)
-  if [[ "${#pdfs[@]}" -eq 0 ]]; then
-    echo "Error: no PDF files found in folder: $INPUT_PATH" >&2
+# Old batch processing logic - no longer used
+if_old_implementation() {
+  if [[ -d "$INPUT_PATH" ]]; then
+    mapfile -d '' pdfs < <(find "$INPUT_PATH" -type f -iname "*.pdf" -print0 | sort -z)
+    if [[ "${#pdfs[@]}" -eq 0 ]]; then
+      echo "Error: no PDF files found in folder: $INPUT_PATH" >&2
+      exit 1
+    fi
+    for pdf in "${pdfs[@]}"; do
+      process_pdf_old "$pdf"
+    done
+    exit 0
+  fi
+
+  if [[ ! -f "$INPUT_PATH" ]]; then
+    echo "Error: file or folder not found: $INPUT_PATH" >&2
     exit 1
   fi
-  for pdf in "${pdfs[@]}"; do
-    process_pdf "$pdf"
-  done
-  exit 0
-fi
-
-if [[ ! -f "$INPUT_PATH" ]]; then
-  echo "Error: file or folder not found: $INPUT_PATH" >&2
-  exit 1
-fi
-process_pdf "$INPUT_PATH"
+  process_pdf_old "$INPUT_PATH"
+}

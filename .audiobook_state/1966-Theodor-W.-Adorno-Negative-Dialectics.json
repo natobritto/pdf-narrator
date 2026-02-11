@@ -1,0 +1,12 @@
+{
+  "input_path": "/home/renato/Desktop/inquisitor/pdf-narrator/test/1966-Theodor-W.-Adorno-Negative-Dialectics.pdf",
+  "output_path": "/home/renato/Desktop/inquisitor/pdf-narrator/test/1966-Theodor-W.-Adorno-Negative-Dialectics.wav",
+  "status": "extracting",
+  "started_at": "2026-02-11T12:48:44.827459",
+  "completed_at": null,
+  "error": null,
+  "extraction_done": false,
+  "generation_done": false,
+  "combination_done": false,
+  "retry_count": 0
+}
