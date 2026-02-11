@@ -24,6 +24,7 @@ from typing import List, Optional, Dict, Any
 
 import numpy as np
 import soundfile as sf
+import torch
 
 from extract import extract_book
 from generate_audiobook_kokoro import generate_audiobooks_kokoro
@@ -291,8 +292,17 @@ class AudiobookProcessor:
         voice = voice_override or audio_cfg.get("voicepack") or "am_liam"
         lang_code = voice[0] if voice else "a"
         audio_format = ".wav"
-        device = audio_cfg.get("device", "cpu")
         
+        requested_device = audio_cfg.get("device")
+
+        if requested_device:
+            device = requested_device
+        else:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        logger.info(f"torch.cuda.is_available(): {torch.cuda.is_available()}")
+        logger.info(f"Selected device: {device}")
+
         logger.info(f"Processing: {input_path.name}")
         logger.info(f"  Output: {output_path}")
         logger.info(f"  Voice: {voice}, Language: {lang_code}, Device: {device}")
