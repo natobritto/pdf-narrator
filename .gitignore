@@ -50,3 +50,11 @@ voice_tests/*
 
 # Ignore the temporary folder used for voice tests
 voice_test_temp/
+deep\ researches/
+to_tts/
+www_vatican_va_stripped_english_renamed_pdf/
+test/
+test2/
+
+.audiobook_state/*
+!.audiobook_state/.gitkeep

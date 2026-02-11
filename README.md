@@ -195,6 +195,23 @@ eSpeak NG is required for phoneme-based operations.
 
 If you plan to leverage your NVIDIA GPU for Kokoro TTS inference, follow these steps to install the NVIDIA drivers, CUDA toolkit, and a matching CUDA-enabled PyTorch build.
 
+``` 
+# NEW INSTRUCTION!
+# Remove the failed local repo attempt (if present)
+sudo rm -f /etc/apt/preferences.d/cuda-repository-pin-600
+sudo rm -f cuda-repo-ubuntu2204-12-4-local_*.deb
+
+# Add NVIDIA CUDA keyring (official method)
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+
+# Update apt
+sudo apt update
+
+# Install CUDA 12.4 toolkit
+sudo apt install -y cuda-toolkit-12-4
+```
+
 1. **Install NVIDIA drivers and supporting packages**
    ```bash
    sudo apt update
