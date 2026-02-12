@@ -1,5 +1,8 @@
 # PDF Narrator
 
+```
+sudo apt-get install ffmpeg
+pip install psutil # optional
 
 # See demo
 python demo_batch_processor.py
@@ -15,8 +18,7 @@ python batch_processor.py pdfs/ --batch --log-file batch.log
 
 # Run tests
 python -m pytest test_batch_processor.py -v
-
-
+```
 
 **Updated for Kokoro v1.0!**  
 Now setting up is easier—simply install the required Python dependencies (including the updated Kokoro package) and run the app. No more manual downloads or moving model files into specific folders.

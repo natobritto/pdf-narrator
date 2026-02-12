@@ -11,6 +11,7 @@ Production-ready audiobook generation with:
 """
 
 import argparse
+import gc
 import json
 import logging
 import os
@@ -108,8 +109,9 @@ class StateManager:
 class AudioCombiner:
     """Memory-efficient audio file combiner"""
     
-    def __init__(self, chunk_size: int = 50):
+    def __init__(self, chunk_size: int = 20):
         self.chunk_size = chunk_size
+        self.use_ffmpeg_threshold = 10000  # Use ffmpeg for >10k files
     
     def combine_audio_files(
         self,
@@ -136,6 +138,14 @@ class AudioCombiner:
         
         logger.info(f"Combining {len(audio_files)} audio files into: {output_path}")
         
+        # Use ffmpeg for very large file counts (more memory efficient)
+        if len(audio_files) > self.use_ffmpeg_threshold:
+            logger.info(
+                f"File count ({len(audio_files)}) exceeds threshold "
+                f"({self.use_ffmpeg_threshold}), using ffmpeg..."
+            )
+            return self._combine_with_ffmpeg(audio_files, output_path)
+        
         try:
             # First pass: verify sample rates and count total samples
             logger.info("Verifying audio files...")
@@ -158,6 +168,9 @@ class AudioCombiner:
                 f"Total samples: {total_samples}, sample rate: {sr}, "
                 f"duration: {duration:.1f}s ({duration/3600:.1f}h)"
             )
+            
+            # Log initial memory usage
+            self._log_memory_usage("before concatenation")
             
             # Second pass: stream and concatenate in chunks
             logger.info(f"Streaming audio in chunks of {self.chunk_size} files...")
@@ -196,14 +209,83 @@ class AudioCombiner:
                     )
                     outfile.write(combined_chunk)
                     
-                    # Explicit cleanup
+                    # Explicit cleanup and force garbage collection
                     del chunk_data, combined_chunk
+                    gc.collect()
+                    
+                    # Log memory every 10 chunks
+                    if chunk_num % 10 == 0:
+                        self._log_memory_usage(f"after chunk {chunk_num}/{num_chunks}")
+            
+            # Final memory check
+            self._log_memory_usage("after concatenation")
             
             logger.info(f"✓ Combined WAV saved: {output_path}")
             return True
             
         except Exception as e:
             logger.error(f"Failed to combine audio files: {e}")
+            logger.error(traceback.format_exc())
+            return False
+    
+    def _log_memory_usage(self, stage: str):
+        """Log current memory usage"""
+        try:
+            import psutil
+            process = psutil.Process()
+            mem_info = process.memory_info()
+            mem_mb = mem_info.rss / 1024 / 1024
+            logger.info(f"Memory usage {stage}: {mem_mb:.1f} MB")
+        except ImportError:
+            pass  # psutil not available
+    
+    def _combine_with_ffmpeg(self, audio_files: List[Path], output_path: Path) -> bool:
+        """Combine audio files using ffmpeg (more memory efficient for large sets)"""
+        import subprocess
+        import tempfile
+        
+        logger.info("Using ffmpeg for memory-efficient concatenation...")
+        
+        try:
+            # Create temporary file list for ffmpeg
+            with tempfile.NamedTemporaryFile(
+                mode='w', suffix='.txt', delete=False, encoding='utf-8'
+            ) as f:
+                list_file = f.name
+                for audio_file in audio_files:
+                    # ffmpeg requires specific format: file 'path'
+                    f.write(f"file '{audio_file.absolute()}'\n")
+            
+            # Run ffmpeg concat
+            cmd = [
+                'ffmpeg',
+                '-f', 'concat',
+                '-safe', '0',
+                '-i', list_file,
+                '-c', 'copy',
+                '-y',  # Overwrite output
+                str(output_path)
+            ]
+            
+            logger.info(f"Running ffmpeg to concatenate {len(audio_files)} files...")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # Cleanup temp file
+            os.unlink(list_file)
+            
+            logger.info(f"✓ Combined WAV saved via ffmpeg: {output_path}")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"ffmpeg failed: {e.stderr}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to combine with ffmpeg: {e}")
             logger.error(traceback.format_exc())
             return False
 
@@ -221,7 +303,7 @@ class AudiobookProcessor:
         self.state_manager = StateManager(
             state_dir or Path.cwd() / ".audiobook_state"
         )
-        self.audio_combiner = AudioCombiner(chunk_size=50)
+        self.audio_combiner = AudioCombiner(chunk_size=20)
         self.max_retries = max_retries
     
     def _load_config(self, config_path: Path) -> Dict[str, Any]:
